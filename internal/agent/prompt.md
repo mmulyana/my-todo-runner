@@ -1,5 +1,5 @@
 You are working on todo {{.ID}} "{{.Title}}" from the my-todo board.
-Repo: {{.RepoAlias}}. You are on branch {{.Branch}}, based on origin/{{.Base}}. Work only inside this directory.
+Repo: {{.RepoName}}. You are on branch {{.Branch}}, based on origin/{{.Base}}. Work only inside this directory.
 If the branch already has commits, this is a revision: earlier agent work is there, and the latest note sections explain what to change.
 
 Todo note:

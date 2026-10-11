@@ -3,8 +3,8 @@
 Runner agentic loop untuk my-todo. Tiap jam (systemd timer) runner:
 
 1. Query todo `assignee = agent` yang belum selesai lewat MCP my-todo.
-2. Ambil **satu** kartu (paling lama dibuat) yang kolom kanban-nya ada di `pickFrom` (default `Ready`), lalu geser ke `In Progress`.
-3. Siapkan worktree di branch `agent/<id8>-<slug>` dari `origin/<base>`, jalankan `opencode run`.
+2. Ambil **satu** kartu (paling lama dibuat) yang kolom kanban-nya ada di `pickFrom` (default `Todo`), tentukan repo-nya, lalu geser ke `In Progress`.
+3. Clone/fetch repo, siapkan worktree di branch `agent/<id8>-<slug>` dari default branch repo (dideteksi dari `origin/HEAD`), jalankan `opencode run`.
 4. Agent selesai → push, buka PR, attach URL PR ke todo, catat ringkasan di note, geser ke `Review`.
    Agent buntu / timeout / gagal → catat alasan di note, geser ke `Blocked`.
 
@@ -23,10 +23,13 @@ Prompt default ada di `internal/agent/prompt.md` (di-embed ke binary); bisa diga
 
 ## Syarat di my-todo
 
-- Backend sudah punya kolom `assignee` (migration `0019_add-todo-assignee`).
-- Project punya kolom board `Ready`, `In Progress`, `Review`, `Blocked` (nama bisa diubah di config).
-- Kalau project punya lebih dari satu repo, note kartu wajib berisi baris `repo: <alias>`, misalnya `repo: be`.
-- Tandai kartu untuk agent: `update_todo` dengan `assignee: "agent"`.
+- Backend punya `Todo.assignee`, `Project.repos`, `Todo.repo` (migration `0019`, `0020`).
+- Tandai kartu untuk agent: toggle *Assign to agent* di detail todo (atau MCP `update_todo` dengan `assignee: "agent"`).
+- **Repo diambil dari my-todo**, bukan config:
+  - `todo.repo` kalau dipilih (harus masih ada di `project.repos`);
+  - kalau tidak dipilih dan project punya tepat 1 repo, repo itu yang dipakai;
+  - selain itu kartu Blocked dengan pesan apa yang perlu diisi.
+- Kolom: kartu diambil dari `Todo` (kolom default project). `In Progress`, `Review`, `Blocked` dibuat otomatis kalau belum ada. Semua nama bisa diubah di config.
 
 ## Deploy
 
@@ -67,7 +70,7 @@ systemctl list-timers my-todo-runner.timer
 
 - Satu tick = maksimal satu kartu; systemd tidak menjalankan tick baru selama tick sebelumnya masih jalan.
 - Worktree kartu yang Blocked disimpan di `/srv/agent/work/<todoId>` untuk debugging, dihapus otomatis setelah 7 hari.
-- Revisi PR: tulis catatan di note lalu geser kartu kembali ke `Ready`. Kalau PR lama masih open, runner push ulang ke branch yang sama; kalau sudah closed, dibuat PR baru.
+- Revisi PR: tulis catatan di note lalu geser kartu kembali ke `Todo`. Kalau PR lama masih open, runner push ulang ke branch yang sama; kalau sudah closed, dibuat PR baru.
 
 ## Develop
 

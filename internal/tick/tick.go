@@ -4,8 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"regexp"
-	"strings"
 	"time"
 
 	"github.com/mmulyana/my-todo-runner/internal/agent"
@@ -50,18 +48,26 @@ func Run(ctx context.Context, cfg *config.Config, dryRun bool, log *slog.Logger)
 	if err != nil {
 		return err
 	}
-	card, project := t.pick(todos)
+	card := t.pick(todos)
 	if card == nil {
 		log.Info("tidak ada kartu siap", "assignee", cfg.Assignee, "kandidat", len(todos))
 		return nil
 	}
-	log = log.With("todo", card.ID, "title", card.Title, "project", project.Name)
+	log = log.With("todo", card.ID, "title", card.Title, "project", card.ProjectName)
 	t.log = log
 
-	repo, repoErr := pickRepo(project, card.Note)
+	projectRepos, err := client.ProjectRepos(ctx, card.ProjectName)
+	if err != nil {
+		return err
+	}
+	repo, repoErr := pickRepo(card, projectRepos)
 	if dryRun {
-		log.Info("dry-run: kartu yang akan diambil", "column", card.KanbanColumnName, "repo", repo.Alias, "repoError", errString(repoErr))
+		log.Info("dry-run: kartu yang akan diambil", "column", card.KanbanColumnName, "repo", repo, "repoError", errString(repoErr))
 		return nil
+	}
+
+	if err := t.ensureColumns(ctx, card.ProjectName); err != nil {
+		return err
 	}
 	if repoErr != nil {
 		t.block(ctx, card, repoErr.Error())
@@ -71,7 +77,7 @@ func Run(ctx context.Context, cfg *config.Config, dryRun bool, log *slog.Logger)
 	if err := client.MoveTodo(ctx, card.ID, cfg.Columns.InProgress); err != nil {
 		return fmt.Errorf("klaim kartu: %w", err)
 	}
-	log.Info("kartu diklaim", "repo", repo.Alias)
+	log.Info("kartu diklaim", "repo", repo)
 
 	wt, err := t.ws.Prepare(ctx, repo, card.ID, card.Title)
 	if err != nil {
@@ -83,7 +89,7 @@ func Run(ctx context.Context, cfg *config.Config, dryRun bool, log *slog.Logger)
 		ID:         card.ID,
 		Title:      card.Title,
 		Note:       card.Note,
-		RepoAlias:  repo.Alias,
+		RepoName:   workspace.RepoName(repo),
 		Branch:     wt.Branch,
 		Base:       wt.Base,
 		ResultPath: wt.ResultPath,
@@ -126,20 +132,33 @@ func Run(ctx context.Context, cfg *config.Config, dryRun bool, log *slog.Logger)
 	return nil
 }
 
-func (t *Tick) pick(todos []mytodo.Todo) (*mytodo.Todo, *config.Project) {
+func (t *Tick) pick(todos []mytodo.Todo) *mytodo.Todo {
 	for i := range todos {
 		todo := &todos[i]
-		if todo.ParentID != nil || !t.cfg.Pickable(todo.KanbanColumnName) {
-			continue
+		if todo.ParentID == nil && todo.ProjectName != "" && t.cfg.Pickable(todo.KanbanColumnName) {
+			return todo
 		}
-		project := t.cfg.Project(todo.ProjectName)
-		if project == nil {
-			t.log.Warn("kartu agent di project yang tidak ada di config, dilewati", "todo", todo.ID, "project", todo.ProjectName)
-			continue
-		}
-		return todo, project
 	}
-	return nil, nil
+	return nil
+}
+
+// note: project baru cuma punya kolom Todo/In Progress/Done, jadi kolom tujuan runner dibuat saat pertama dibutuhkan
+func (t *Tick) ensureColumns(ctx context.Context, project string) error {
+	existing, err := t.todo.ColumnNames(ctx, project)
+	if err != nil {
+		return err
+	}
+	for _, name := range []string{t.cfg.Columns.InProgress, t.cfg.Columns.Review, t.cfg.Columns.Blocked} {
+		if existing[name] {
+			continue
+		}
+		if err := t.todo.CreateColumn(ctx, project, name); err != nil {
+			return fmt.Errorf("buat kolom %q: %w", name, err)
+		}
+		existing[name] = true
+		t.log.Info("kolom dibuat", "column", name)
+	}
+	return nil
 }
 
 func (t *Tick) block(ctx context.Context, card *mytodo.Todo, reason string) {
@@ -155,26 +174,23 @@ func (t *Tick) block(ctx context.Context, card *mytodo.Todo, reason string) {
 	}
 }
 
-var repoLine = regexp.MustCompile(`(?mi)^\s*repo:\s*([\w.-]+)\s*$`)
-
-func pickRepo(project *config.Project, note string) (config.Repo, error) {
-	if len(project.Repos) == 1 {
-		return project.Repos[0], nil
-	}
-	aliases := make([]string, len(project.Repos))
-	for i, repo := range project.Repos {
-		aliases[i] = repo.Alias
-	}
-	match := repoLine.FindStringSubmatch(note)
-	if match == nil {
-		return config.Repo{}, fmt.Errorf("project %q punya beberapa repo, tambahkan baris `repo: <%s>` di note", project.Name, strings.Join(aliases, "|"))
-	}
-	for _, repo := range project.Repos {
-		if strings.EqualFold(repo.Alias, match[1]) {
-			return repo, nil
+func pickRepo(card *mytodo.Todo, projectRepos []string) (string, error) {
+	if card.Repo != nil {
+		for _, url := range projectRepos {
+			if url == *card.Repo {
+				return url, nil
+			}
 		}
+		return "", fmt.Errorf("repo %s tidak ada lagi di project %q, pilih ulang repo di detail todo", *card.Repo, card.ProjectName)
 	}
-	return config.Repo{}, fmt.Errorf("repo %q tidak ada di project %q (pilihan: %s)", match[1], project.Name, strings.Join(aliases, ", "))
+	switch len(projectRepos) {
+	case 0:
+		return "", fmt.Errorf("project %q belum punya repo, tambahkan di halaman project (Repositories)", card.ProjectName)
+	case 1:
+		return projectRepos[0], nil
+	default:
+		return "", fmt.Errorf("project %q punya %d repo, pilih repo di detail todo", card.ProjectName, len(projectRepos))
+	}
 }
 
 func prBody(card *mytodo.Todo, summary string) string {

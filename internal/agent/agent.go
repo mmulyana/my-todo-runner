@@ -20,7 +20,7 @@ type PromptData struct {
 	ID         string
 	Title      string
 	Note       string
-	RepoAlias  string
+	RepoName   string
 	Branch     string
 	Base       string
 	ResultPath string

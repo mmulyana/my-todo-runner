@@ -21,6 +21,7 @@ type Todo struct {
 	ProjectName      string  `json:"projectName"`
 	KanbanColumnName string  `json:"kanbanColumnName"`
 	Assignee         *string `json:"assignee"`
+	Repo             *string `json:"repo"`
 }
 
 type Client struct {
@@ -112,6 +113,42 @@ func (c *Client) GetTodo(ctx context.Context, id string) (Todo, error) {
 
 func (c *Client) MoveTodo(ctx context.Context, id, column string) error {
 	return c.call(ctx, "move_todo", map[string]any{"id": id, "columnName": column}, nil)
+}
+
+func (c *Client) ProjectRepos(ctx context.Context, project string) ([]string, error) {
+	var out struct {
+		Projects []struct {
+			Name  string   `json:"name"`
+			Repos []string `json:"repos"`
+		} `json:"projects"`
+	}
+	if err := c.call(ctx, "list_projects", map[string]any{}, &out); err != nil {
+		return nil, err
+	}
+	for _, p := range out.Projects {
+		if p.Name == project {
+			return p.Repos, nil
+		}
+	}
+	return nil, fmt.Errorf("project %q tidak ditemukan", project)
+}
+
+func (c *Client) ColumnNames(ctx context.Context, project string) (map[string]bool, error) {
+	var out struct {
+		Columns []struct {
+			Name string `json:"name"`
+		} `json:"columns"`
+	}
+	err := c.call(ctx, "get_board", map[string]any{"projectName": project, "includeCompleted": false}, &out)
+	names := make(map[string]bool, len(out.Columns))
+	for _, column := range out.Columns {
+		names[column.Name] = true
+	}
+	return names, err
+}
+
+func (c *Client) CreateColumn(ctx context.Context, project, name string) error {
+	return c.call(ctx, "create_kanban_column", map[string]any{"projectName": project, "name": name}, nil)
 }
 
 func (c *Client) AddAttachment(ctx context.Context, todoID, url string) error {

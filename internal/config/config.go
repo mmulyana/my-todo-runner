@@ -16,26 +16,14 @@ type Columns struct {
 	Blocked    string   `json:"blocked"`
 }
 
-type Repo struct {
-	Alias string `json:"alias"`
-	URL   string `json:"url"`
-	Base  string `json:"base"`
-}
-
-type Project struct {
-	Name  string `json:"name"`
-	Repos []Repo `json:"repos"`
-}
-
 type Config struct {
-	Columns        Columns   `json:"columns"`
-	Assignee       string    `json:"assignee"`
-	WorkDir        string    `json:"workDir"`
-	OpencodeBin    string    `json:"opencodeBin"`
-	OpencodeArgs   []string  `json:"opencodeArgs"`
-	TimeoutMinutes int       `json:"timeoutMinutes"`
-	PromptFile     string    `json:"promptFile"`
-	Projects       []Project `json:"projects"`
+	Columns        Columns  `json:"columns"`
+	Assignee       string   `json:"assignee"`
+	WorkDir        string   `json:"workDir"`
+	OpencodeBin    string   `json:"opencodeBin"`
+	OpencodeArgs   []string `json:"opencodeArgs"`
+	TimeoutMinutes int      `json:"timeoutMinutes"`
+	PromptFile     string   `json:"promptFile"`
 
 	// note: secret dibaca dari env (EnvironmentFile systemd), bukan dari config.json
 	MCPURL string `json:"-"`
@@ -50,7 +38,7 @@ func Load(path string) (*Config, error) {
 
 	cfg := Config{
 		Columns: Columns{
-			PickFrom:   []string{"Ready"},
+			PickFrom:   []string{"Todo"},
 			InProgress: "In Progress",
 			Review:     "Review",
 			Blocked:    "Blocked",
@@ -80,33 +68,11 @@ func (c *Config) validate() error {
 	if c.Token == "" {
 		errs = append(errs, errors.New("env MY_TODO_TOKEN kosong"))
 	}
-	if len(c.Projects) == 0 {
-		errs = append(errs, errors.New("projects kosong"))
-	}
-	for _, p := range c.Projects {
-		if len(p.Repos) == 0 {
-			errs = append(errs, fmt.Errorf("project %q tidak punya repo", p.Name))
-		}
-		for _, r := range p.Repos {
-			if r.Alias == "" || r.URL == "" || r.Base == "" {
-				errs = append(errs, fmt.Errorf("project %q: repo wajib punya alias, url, base", p.Name))
-			}
-		}
-	}
 	return errors.Join(errs...)
 }
 
 func (c *Config) Timeout() time.Duration {
 	return time.Duration(c.TimeoutMinutes) * time.Minute
-}
-
-func (c *Config) Project(name string) *Project {
-	for i := range c.Projects {
-		if c.Projects[i].Name == name {
-			return &c.Projects[i]
-		}
-	}
-	return nil
 }
 
 func (c *Config) Pickable(column string) bool {

@@ -10,8 +10,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/mmulyana/my-todo-runner/internal/config"
 )
 
 type Worktree struct {
@@ -39,32 +37,53 @@ func git(ctx context.Context, dir string, args ...string) (string, error) {
 	return strings.TrimSpace(string(out)), nil
 }
 
-func (m Manager) Prepare(ctx context.Context, repo config.Repo, todoID, title string) (*Worktree, error) {
+func RepoName(url string) string {
+	return url[strings.LastIndex(url, "/")+1:]
+}
+
+func repoDirName(url string) string {
+	parts := strings.Split(strings.TrimSuffix(url, "/"), "/")
+	if len(parts) < 2 {
+		return slug(url)
+	}
+	return parts[len(parts)-2] + "-" + parts[len(parts)-1]
+}
+
+func (m Manager) Prepare(ctx context.Context, repoURL, todoID, title string) (*Worktree, error) {
 	for _, dir := range []string{m.reposDir(), m.workDir()} {
 		if err := os.MkdirAll(dir, 0o755); err != nil {
 			return nil, err
 		}
 	}
 
-	repoDir := filepath.Join(m.reposDir(), repo.Alias)
+	repoDir := filepath.Join(m.reposDir(), repoDirName(repoURL))
 	if _, err := os.Stat(repoDir); os.IsNotExist(err) {
-		if _, err := git(ctx, m.reposDir(), "clone", repo.URL, repoDir); err != nil {
+		if _, err := git(ctx, m.reposDir(), "clone", repoURL, repoDir); err != nil {
 			return nil, err
 		}
 	} else if _, err := git(ctx, repoDir, "fetch", "origin", "--prune"); err != nil {
 		return nil, err
 	}
+	// note: default branch dibaca dari remote (bukan config), refresh tiap tick kalau default branch repo diganti
+	if _, err := git(ctx, repoDir, "remote", "set-head", "origin", "--auto"); err != nil {
+		return nil, err
+	}
+	head, err := git(ctx, repoDir, "symbolic-ref", "--short", "refs/remotes/origin/HEAD")
+	if err != nil {
+		return nil, err
+	}
+	base := strings.TrimPrefix(head, "origin/")
 
 	wt := &Worktree{
 		Path:       filepath.Join(m.workDir(), todoID),
 		RepoDir:    repoDir,
 		Branch:     "agent/" + todoID[:8] + "-" + slug(title),
-		Base:       repo.Base,
+		Base:       base,
 		ResultPath: filepath.Join(m.workDir(), todoID+".result.json"),
 	}
 
 	// note: kartu revisi melanjutkan branch remote-nya biar commit di PR yang masih open nggak hilang saat force push
-	startPoint := "origin/" + repo.Base
+	startPoint := "origin/" + base
 	if _, err := git(ctx, repoDir, "rev-parse", "--verify", "--quiet", "origin/"+wt.Branch); err == nil {
 		startPoint = "origin/" + wt.Branch
 	}
