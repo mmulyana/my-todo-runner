@@ -1,0 +1,10 @@
+[Unit]
+Description=Run my-todo agent runner every hour
+
+[Timer]
+OnCalendar=hourly
+Persistent=true
+RandomizedDelaySec=120
+
+[Install]
+WantedBy=timers.target

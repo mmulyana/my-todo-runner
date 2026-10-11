@@ -1,0 +1,14 @@
+[Unit]
+Description=my-todo agent runner (one tick)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=agent
+Group=agent
+WorkingDirectory=/srv/agent
+EnvironmentFile=/etc/my-todo-runner/env
+Environment=HOME=/home/agent
+ExecStart=/usr/local/bin/my-todo-runner run-once --config /etc/my-todo-runner/config.json
+TimeoutStartSec=60min

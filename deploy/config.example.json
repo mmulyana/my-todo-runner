@@ -1,0 +1,21 @@
+{
+  "columns": {
+    "pickFrom": ["Ready"],
+    "inProgress": "In Progress",
+    "review": "Review",
+    "blocked": "Blocked"
+  },
+  "assignee": "agent",
+  "workDir": "/srv/agent",
+  "opencodeBin": "/usr/local/bin/opencode",
+  "timeoutMinutes": 45,
+  "projects": [
+    {
+      "name": "my-todo",
+      "repos": [
+        { "alias": "be", "url": "https://github.com/mmulyana/my-todo-be.git", "base": "master" },
+        { "alias": "fe", "url": "https://github.com/mmulyana/my-todo-fe.git", "base": "main" }
+      ]
+    }
+  ]
+}
