@@ -58,7 +58,7 @@ func Load(path string) (*Config, error) {
 		Assignee:       "agent",
 		WorkDir:        "/srv/agent",
 		OpencodeBin:    "opencode",
-		OpencodeArgs:   []string{"run", "--auto", "--standalone"},
+		OpencodeArgs:   []string{"run", "--auto"},
 		TimeoutMinutes: 45,
 	}
 	if err := json.Unmarshal(raw, &cfg); err != nil {

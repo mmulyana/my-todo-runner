@@ -52,10 +52,10 @@ jobs:
       - name: Install binary
         run: ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} 'sudo install -m 755 /tmp/my-todo-runner /usr/local/bin/my-todo-runner && rm /tmp/my-todo-runner'
 
-      # note: dilewati sampai setup awal di VPS selesai (config belum ada); setelah itu memastikan config, env, dan koneksi MCP masih sehat
+      # note: dilewati sampai setup awal di VPS selesai (config/env belum ada); setelah itu memastikan config, env, dan koneksi MCP masih sehat
       - name: Smoke test (dry-run)
         run: |
           ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
-            if [ ! -f /etc/my-todo-runner/config.json ]; then echo "config belum ada, smoke test dilewati"; exit 0; fi
+            if [ ! -f /etc/my-todo-runner/config.json ] || ! sudo test -f /etc/my-todo-runner/env; then echo "config/env belum ada, smoke test dilewati"; exit 0; fi
             sudo -u agent bash -c "set -a; . /etc/my-todo-runner/env; set +a; cd /srv/agent; my-todo-runner run-once --config /etc/my-todo-runner/config.json --dry-run"
           '

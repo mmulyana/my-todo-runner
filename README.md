@@ -36,16 +36,16 @@ Prompt default ada di `internal/agent/prompt.md` (di-embed ke binary); bisa diga
 
 ### OpenCode (user `agent`)
 
-Runner memanggil `opencode run --auto --standalone "<prompt>"` (bisa diubah lewat `opencodeArgs`):
+Runner memanggil `opencode run --auto "<prompt>"` (bisa diubah lewat `opencodeArgs`):
 
 - `--auto` menyetujui izin edit/bash otomatis, jadi tidak perlu konfigurasi `permission`.
-- `--standalone` memakai server privat per run, jadi tidak bergantung pada background service.
+- OpenCode 1.x (installer resmi, dipakai di VPS) sudah memakai server lokal per run. Di OpenCode 2.x tambahkan `--standalone` di `opencodeArgs` supaya tidak bergantung pada background service.
 - MCP my-todo **disuntik otomatis** lewat env `OPENCODE_CONFIG_CONTENT` dari `MY_TODO_MCP_URL` + `MY_TODO_TOKEN`; token tidak perlu ditulis lagi di config OpenCode.
 - `PWD` diset ke worktree, karena OpenCode menentukan folder project dari `PWD`, bukan dari working directory proses.
 
 Yang tetap harus disiapkan manual hanya provider/model: login sekali (`sudo -iu agent opencode auth login` atau set API key provider di env), lalu uji `sudo -iu agent opencode run "halo"` harus jalan tanpa menunggu input.
 
-Teruji dengan OpenCode v2.0.18.
+Teruji E2E dengan OpenCode 2.0.18 (Windows); di VPS terpasang 1.18.35.
 
 ### Branch protection
 
