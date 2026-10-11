@@ -1,0 +1,61 @@
+name: CI-CD my-todo-runner
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test
+        run: go test ./...
+
+  deploy:
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Build
+        run: make build
+
+      - name: Install SSH Key
+        uses: shimataro/ssh-key-action@v2
+        with:
+          key: ${{ secrets.SSH_KEY }}
+          known_hosts: "secret"
+
+      - name: Adding Known Hosts
+        run: ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Upload binary
+        run: scp dist/my-todo-runner ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/tmp/my-todo-runner
+
+      # note: install mengganti file secara atomik, tick yang sedang jalan tetap memakai binary lama sampai selesai
+      - name: Install binary
+        run: ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} 'sudo install -m 755 /tmp/my-todo-runner /usr/local/bin/my-todo-runner && rm /tmp/my-todo-runner'
+
+      # note: dilewati sampai setup awal di VPS selesai (config belum ada); setelah itu memastikan config, env, dan koneksi MCP masih sehat
+      - name: Smoke test (dry-run)
+        run: |
+          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
+            if [ ! -f /etc/my-todo-runner/config.json ]; then echo "config belum ada, smoke test dilewati"; exit 0; fi
+            sudo -u agent bash -c "set -a; . /etc/my-todo-runner/env; set +a; cd /srv/agent; my-todo-runner run-once --config /etc/my-todo-runner/config.json --dry-run"
+          '

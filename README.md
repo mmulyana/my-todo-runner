@@ -28,35 +28,11 @@ Prompt default ada di `internal/agent/prompt.md` (di-embed ke binary); bisa diga
 - Kalau project punya lebih dari satu repo, note kartu wajib berisi baris `repo: <alias>`, misalnya `repo: be`.
 - Tandai kartu untuk agent: `update_todo` dengan `assignee: "agent"`.
 
-## Setup VPS
+## Deploy
 
-```bash
-# 1. user khusus + direktori kerja
-sudo useradd -m -s /bin/bash agent
-sudo mkdir -p /srv/agent /etc/my-todo-runner
-sudo chown agent:agent /srv/agent
-
-# 2. tools: git, gh, opencode (sebagai user agent)
-sudo apt install -y git gh
-sudo -iu agent bash -c 'curl -fsSL https://opencode.ai/install | bash'
-# catat path binary opencode (biasanya /home/agent/.opencode/bin/opencode) untuk `opencodeBin`
-
-# 3. auth GitHub: token fine-grained, hanya repo di config, izin Contents + Pull requests (read/write)
-sudo -iu agent bash -c 'echo "$GH_TOKEN" | gh auth login --with-token && gh auth setup-git'
-
-# 4. binary runner (build di lokal: `make build`)
-scp dist/my-todo-runner vps:/tmp/ && ssh vps 'sudo install -m 755 /tmp/my-todo-runner /usr/local/bin/'
-
-# 5. config + secret
-sudo cp deploy/config.example.json /etc/my-todo-runner/config.json   # sesuaikan opencodeBin & projects
-sudo cp deploy/env.example /etc/my-todo-runner/env                   # isi token
-sudo chown root:agent /etc/my-todo-runner/env && sudo chmod 640 /etc/my-todo-runner/env
-
-# 6. systemd
-sudo cp deploy/my-todo-runner.service deploy/my-todo-runner.timer /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable --now my-todo-runner.timer
-```
+- **Binary**: CI (`.github/workflows/ci-cd.yml`) menjalankan vet + test, build linux/amd64, lalu memasang binary ke `/usr/local/bin/my-todo-runner` di VPS dan menjalankan `--dry-run` sebagai smoke test. Secret repo: `SSH_KEY`, `SSH_USER`, `SSH_HOST`.
+- **Config, env, unit systemd, langkah setup VPS**: ada di repo infra, folder `my-todo-runner/` (`install.sh` + README). `deploy/` di repo ini hanya contoh generik.
+- User `agent` butuh identitas git (`user.name`/`user.email`), kalau tidak, commit dari agent gagal.
 
 ### OpenCode (user `agent`)
 
